@@ -300,6 +300,34 @@ describe('cli', function() {
     });
   });
 
+
+  describe('should handle moddle extensions', function() {
+
+    before(function() {
+
+      this.timeout(30000);
+
+      return exec('install-local', [], __dirname + '/cli/moddle-extension');
+    });
+
+
+    testOnly({
+      cmd: [ 'bpmnlint', 'diagram.bpmn' ],
+      cwd: __dirname + '/cli/moddle-extension',
+      expect: {
+        code: 1,
+        stderr: `
+
+        ${diagramPath('diagram.bpmn')}
+        ServiceTask  error  Element is a camunda:ServiceTaskLike <Service Task>  no-service-task-like
+
+        ✖ 1 problem (1 error, 0 warnings)
+      `,
+        stdout: EMPTY
+      }
+    });
+  });
+
 });
 
 // helper /////////////////////////////

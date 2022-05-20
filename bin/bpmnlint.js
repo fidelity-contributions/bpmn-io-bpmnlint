@@ -23,6 +23,7 @@ const BpmnModdle = require('bpmn-moddle');
 
 const Linter = require('../lib/linter');
 const NodeResolver = require('../lib/resolver/node-resolver');
+const { createScopedRequire } = require('../lib/resolver/helper');
 
 const Table = require('cli-table');
 
@@ -51,8 +52,6 @@ Usage
 `;
 
 
-const moddle = new BpmnModdle();
-
 function boldRed(str) {
   return bold(red(str));
 }
@@ -73,10 +72,11 @@ function glob(files) {
  * Reads XML form path and return moddle object
  *
  * @param {string} diagramXML
+ * @param {BpmnModdle.BPMNModdle} moddle
  *
  * @return { { rootElement: any; warnings: Error[], error?: Error } } parseResult
  */
-async function parseDiagram(diagramXML) {
+async function parseDiagram(diagramXML, moddle) {
 
   try {
     const {
@@ -223,7 +223,7 @@ function printReports(filePath, results) {
   };
 }
 
-async function lintDiagram(diagramPath, config) {
+async function lintDiagram(diagramPath, config, moddle) {
 
   let diagramXML;
 
@@ -238,7 +238,7 @@ async function lintDiagram(diagramPath, config) {
     error: importError,
     warnings: importWarnings,
     moddleElement
-  } = await parseDiagram(diagramXML);
+  } = await parseDiagram(diagramXML, moddle);
 
   if (importError) {
     return printReports(diagramPath, {
@@ -295,8 +295,10 @@ async function lint(files, config) {
 
   console.log();
 
+  const moddle = createModdle(config);
+
   for (let i = 0; i < files.length; i++) {
-    let results = await lintDiagram(files[i], config);
+    let results = await lintDiagram(files[i], config, moddle);
 
     errorCount += results.errorCount;
     warningCount += results.warningCount;
@@ -397,3 +399,31 @@ Learn more about configuring bpmnlint: https://github.com/bpmn-io/bpmnlint#confi
 }
 
 run().catch(errorAndExit);
+
+/**
+ * Create moddle instance with extensions from the config.
+ *
+ * @param {object} config
+ * @returns {BpmnModdle.BPMNModdle}
+ */
+function createModdle(config) {
+  const scopedRequire = createScopedRequire(process.cwd());
+
+  const options = config.moddleExtensions || {};
+
+  for (const key in options) {
+    const extension = options[key];
+
+    try {
+      options[key] = scopedRequire(extension);
+    } catch (error) {
+      errorAndExit('Error: Could not load moddle extension %s: %s\n\n', key, extension, error.message);
+    }
+  }
+
+  try {
+    return new BpmnModdle(options);
+  } catch (error) {
+    errorAndExit('Error: Could not create moddle instance\n\n%s', error.message);
+  }
+}
